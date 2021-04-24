@@ -4,22 +4,20 @@ import 'package:flutter/material.dart';
 enum audioStateEnum { STOPPED, PLAYING, PAUSED }
 
 class AudioPlayerProvider extends ChangeNotifier {
+  AudioPlayer audioPlayer = new AudioPlayer();
   Duration totalDuration;
   Duration position;
   audioStateEnum audioState;
   String source;
-
-  AudioPlayerProvider() {
-    initAudio();
-  }
-
-  AudioPlayer audioPlayer = AudioPlayer();
+  bool isInitialized = false;
+  bool isBuffering = true;
 
   initAudio() {
-    source =
-        'https://www.sautuliman.com/wp-content/uploads/Zikr-al-Husain-Khair-Zad-al-Zakireen.mp3';
+    position = Duration(seconds: 0);
+    totalDuration = Duration(seconds: 0);
     audioPlayer.onDurationChanged.listen((updatedDuration) {
       totalDuration = updatedDuration;
+      isBuffering = false;
       notifyListeners();
     });
 
@@ -29,19 +27,34 @@ class AudioPlayerProvider extends ChangeNotifier {
     });
 
     audioPlayer.onPlayerStateChanged.listen((playerState) {
-      if (playerState == AudioPlayerState.STOPPED)
-        audioState = audioStateEnum.STOPPED;
-      if (playerState == AudioPlayerState.PLAYING)
-        audioState = audioStateEnum.PLAYING;
-      if (playerState == AudioPlayerState.PAUSED)
-        audioState = audioStateEnum.PAUSED;
+      switch (playerState) {
+        case AudioPlayerState.STOPPED:
+          audioState = audioStateEnum.STOPPED;
+          break;
+        case AudioPlayerState.PLAYING:
+          audioState = audioStateEnum.PLAYING;
+          break;
+        case AudioPlayerState.PAUSED:
+          audioState = audioStateEnum.PAUSED;
+          break;
+        default:
+      }
       notifyListeners();
     });
-    playAudio();
+    isInitialized = true;
   }
 
-  playAudio() {
-    audioPlayer.play(source);
+  Future<void> setSource(src) async {
+    if (!isInitialized) initAudio();
+    source = src;
+    await audioPlayer.setUrl(source);
+  }
+
+  Future<void> playAudio() async {
+    if (!isInitialized) initAudio();
+    setBuffering(true);
+    await audioPlayer.play(source);
+    setBuffering(false);
   }
 
   pauseAudio() {
@@ -52,7 +65,18 @@ class AudioPlayerProvider extends ChangeNotifier {
     audioPlayer.stop();
   }
 
-  seekAudio(Duration durationToSeek) {
-    audioPlayer.seek(durationToSeek);
+  setBuffering(buffering) {
+    isBuffering = buffering;
+    notifyListeners();
+  }
+
+  Future<void> seekAudio(Duration durationToSeek) async {
+    setBuffering(true);
+    await audioPlayer.seek(durationToSeek);
+    if (audioState == audioStateEnum.PLAYING) {
+      print("PLAYING");
+      await audioPlayer.play(source);
+    }
+    setBuffering(false);
   }
 }
